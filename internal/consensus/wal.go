@@ -55,6 +55,7 @@ func init() {
 // Simple write-ahead logger
 
 // WAL is an interface for any write-ahead logger.
+// WAL 是任何写在前面的记录器的一个接口
 type WAL interface {
 	Write(WALMessage) error
 	WriteSync(WALMessage) error

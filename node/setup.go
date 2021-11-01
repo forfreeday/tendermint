@@ -283,6 +283,7 @@ func createBlockchainReactor(
 	return reactorShim, reactor, nil
 }
 
+// 创建共识处理器
 func createConsensusReactor(
 	cfg *config.Config,
 	state sm.State,

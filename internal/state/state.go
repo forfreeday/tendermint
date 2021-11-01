@@ -63,6 +63,7 @@ func VersionFromProto(v tmstate.Version) Version {
 // but none of them should be mutated directly.
 // Instead, use state.Copy() or updateState(...).
 // NOTE: not goroutine-safe.
+// 接收区块，更新链的状态
 type State struct {
 	// FIXME: This can be removed as TMVersion is a constant, and version.Consensus should
 	// eventually be replaced by VersionParams in ConsensusParams

@@ -1032,6 +1032,7 @@ func (cfg *ConsensusConfig) WaitForTxs() bool {
 }
 
 // Propose returns the amount of time to wait for a proposal
+// 返回一个等待提案的时间
 func (cfg *ConsensusConfig) Propose(round int32) time.Duration {
 	return time.Duration(
 		cfg.TimeoutPropose.Nanoseconds()+cfg.TimeoutProposeDelta.Nanoseconds()*int64(round),

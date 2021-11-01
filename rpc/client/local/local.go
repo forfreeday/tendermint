@@ -21,6 +21,9 @@ import (
 Local is a Client implementation that directly executes the rpc
 functions on a given node, without going through HTTP or GRPC.
 
+本地是一个客户端的实现，它直接在给定的节点上执行rpc
+功能，而不需要通过HTTP或GRPC。
+
 This implementation is useful for:
 
 * Running tests against a node in-process without the overhead

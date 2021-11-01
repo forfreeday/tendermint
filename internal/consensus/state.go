@@ -62,6 +62,7 @@ func (ti *timeoutInfo) String() string {
 }
 
 // interface to the mempool
+// 交易缓存池接口
 type txNotifier interface {
 	TxsAvailable() <-chan struct{}
 }
@@ -224,6 +225,7 @@ func (cs *State) String() string {
 }
 
 // GetState returns a copy of the chain state.
+// 返回一个链状态的副本
 func (cs *State) GetState() sm.State {
 	cs.mtx.RLock()
 	defer cs.mtx.RUnlock()
@@ -273,6 +275,7 @@ func (cs *State) GetValidators() (int64, []*types.Validator) {
 
 // SetPrivValidator sets the private validator account for signing votes. It
 // immediately requests pubkey and caches it.
+// 设置用于签名投票的 私人validator 账户。它立即请求pubkey并将其缓存。
 func (cs *State) SetPrivValidator(priv types.PrivValidator) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
@@ -306,6 +309,7 @@ func (cs *State) SetPrivValidator(priv types.PrivValidator) {
 
 // SetTimeoutTicker sets the local timer. It may be useful to overwrite for
 // testing.
+// 设置本地定时器。为测试而覆盖可能是有用的。
 func (cs *State) SetTimeoutTicker(timeoutTicker TimeoutTicker) {
 	cs.mtx.Lock()
 	cs.timeoutTicker = timeoutTicker
@@ -333,9 +337,11 @@ func (cs *State) LoadCommit(height int64) *types.Commit {
 
 // OnStart loads the latest state via the WAL, and starts the timeout and
 // receive routines.
+// OnStart通过WAL加载最新状态，并启动超时和接收程序。
 func (cs *State) OnStart() error {
 	// We may set the WAL in testing before calling Start, so only OpenWAL if its
 	// still the nilWAL.
+	// 在测试中，我们可能会在调用Start之前设置WAL，所以只有在其仍然是nilWAL的情况下才会打开WAL。
 	if _, ok := cs.wal.(nilWAL); ok {
 		if err := cs.loadWalFile(); err != nil {
 			return err
@@ -344,6 +350,7 @@ func (cs *State) OnStart() error {
 
 	// We may have lost some votes if the process crashed reload from consensus
 	// log to catchup.
+	// 如果从共识日志到追赶的过程中崩溃重新加载，我们可能会失去一些票数。
 	if cs.doWALCatchup {
 		repairAttempted := false
 
@@ -403,20 +410,27 @@ func (cs *State) OnStart() error {
 	// NOTE: we will get a build up of garbage go routines
 	// firing on the tockChan until the receiveRoutine is started
 	// to deal with them (by that point, at most one will be valid)
+	// 我们需要重放的timeoutRoutine，这样我们就不会在tick chan上阻塞。
+	// 注意：我们将得到大量的垃圾程序
+	// 直到receiveRoutine开始处理它们（到那时，最多只有一个是有效的）来处理它们（到那时，最多只有一个是有效的）。
 	if err := cs.timeoutTicker.Start(); err != nil {
 		return err
 	}
 
 	// Double Signing Risk Reduction
+	// 检查双重验签
 	if err := cs.checkDoubleSigningRisk(cs.Height); err != nil {
 		return err
 	}
 
 	// now start the receiveRoutine
+	// 接收程序
 	go cs.receiveRoutine(0)
 
 	// schedule the first round!
 	// use GetRoundState so we don't race the receiveRoutine for access
+	// 安排第一轮!
+	// 使用GetRoundState，这样我们就不会和receiveRoutine争夺访问权了。
 	cs.scheduleRound0(cs.GetRoundState())
 
 	return nil
@@ -760,6 +774,11 @@ func (cs *State) newStep() {
 // It keeps the RoundState and is the only thing that updates it.
 // Updates (state transitions) happen on timeouts, complete proposals, and 2/3 majorities.
 // State must be locked before any internal state is updated.
+// receiveRoutine处理可能导致状态转换的消息。
+// 它的参数(n)是退出前要处理的消息的数量--用0表示永远运行。
+// 它保持RoundState，并且是唯一能更新它的东西。
+// 更新（状态转换）发生在超时、完整提案和2/3多数的情况下。
+// 在任何内部状态被更新之前，状态必须被锁定。
 func (cs *State) receiveRoutine(maxSteps int) {
 	onExit := func(cs *State) {
 		// NOTE: the internalMsgQueue may have signed messages from our
@@ -798,7 +817,7 @@ func (cs *State) receiveRoutine(maxSteps int) {
 				return
 			}
 		}
-
+		//拿到当前链状态
 		rs := cs.RoundState
 		var mi msgInfo
 
@@ -815,6 +834,7 @@ func (cs *State) receiveRoutine(maxSteps int) {
 			// may generate internal events (votes, complete proposals, 2/3 majorities)
 			cs.handleMsg(mi)
 
+			//监听内部队列消息
 		case mi = <-cs.internalMsgQueue:
 			err := cs.wal.WriteSync(mi) // NOTE: fsync
 			if err != nil {
@@ -833,8 +853,10 @@ func (cs *State) receiveRoutine(maxSteps int) {
 			}
 
 			// handles proposals, block parts, votes
+			// 核心的状态逻辑处理
 			cs.handleMsg(mi)
 
+		// 注意这个监听，ScheduleTimeout 的 channel
 		case ti := <-cs.timeoutTicker.Chan(): // tockChan:
 			if err := cs.wal.Write(ti); err != nil {
 				cs.Logger.Error("failed writing to WAL", "err", err)
@@ -946,6 +968,7 @@ func (cs *State) handleTimeout(ti timeoutInfo, rs cstypes.RoundState) {
 		cs.enterNewRound(ti.Height, 0)
 
 	case cstypes.RoundStepNewRound:
+		//如果当前状态是新一轮，进入处理
 		cs.enterPropose(ti.Height, 0)
 
 	case cstypes.RoundStepPropose:
@@ -1120,6 +1143,8 @@ func (cs *State) enterPropose(height int64, round int32) {
 	}()
 
 	// If we don't get the proposal and all block parts quick enough, enterPrevote
+	// 如果不能迅速得到提案(proposal)和所有块状部分，进入 Prevote 阶段
+	// 如果是初始启动，肯定没有足够的状态，会进入 provote
 	cs.scheduleTimeout(cs.config.Propose(round), height, round, cstypes.RoundStepPropose)
 
 	// Nothing more to do if we're not a validator
@@ -1137,6 +1162,7 @@ func (cs *State) enterPropose(height int64, round int32) {
 		return
 	}
 
+	// 拿公钥地址
 	address := cs.privValidatorPubKey.Address()
 
 	// if not a validator, we're done
@@ -1150,7 +1176,7 @@ func (cs *State) enterPropose(height int64, round int32) {
 			"propose step; our turn to propose",
 			"proposer", address,
 		)
-
+		// 准备提案
 		cs.decideProposal(height, round)
 	} else {
 		logger.Debug(
@@ -1164,6 +1190,7 @@ func (cs *State) isProposer(address []byte) bool {
 	return bytes.Equal(cs.Validators.GetProposer().Address, address)
 }
 
+// 默认提案处理
 func (cs *State) defaultDecideProposal(height int64, round int32) {
 	var block *types.Block
 	var blockParts *types.PartSet
@@ -1962,7 +1989,9 @@ func (cs *State) addProposalBlockPart(msg *BlockPartMessage, peerID types.NodeID
 }
 
 // Attempt to add the vote. if its a duplicate signature, dupeout the validator
+// 试图添加投票。如果是重复的签名，则剔除验证器。
 func (cs *State) tryAddVote(vote *types.Vote, peerID types.NodeID) (bool, error) {
+	// 投票逻辑
 	added, err := cs.addVote(vote, peerID)
 	if err != nil {
 		// If the vote height is off, we'll just ignore it,

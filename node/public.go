@@ -16,6 +16,9 @@ import (
 // process that host their own process-local tendermint node. This is
 // equivalent to running tendermint in it's own process communicating
 // to an external ABCI application.
+// 构建一个 tendermint 节点服务，用于承载自己进程的 tendermint 节点的 go 进程。
+// 这相当于在它自己的进程中运行tendermint，并与外部ABCI应用程序通信。
+
 func NewDefault(conf *config.Config, logger log.Logger) (service.Service, error) {
 	return newDefaultNode(conf, logger)
 }
