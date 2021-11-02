@@ -139,6 +139,8 @@ type State struct {
 
 	// synchronous pubsub between consensus state and reactor.
 	// state only emits EventNewRoundStep, EventValidBlock, and EventVote
+	// 共识状态和反应器之间的同步pubsub。
+	// 状态只发出EventNewRoundStep、EventValidBlock和EventVote。
 	evsw tmevents.EventSwitch
 
 	// for reporting metrics
@@ -401,6 +403,7 @@ func (cs *State) OnStart() error {
 		}
 	}
 
+	// EventSwitch 只监听 EventNewRoundStep、EventValidBlock和EventVote 这三种事件
 	if err := cs.evsw.Start(); err != nil {
 		return err
 	}
@@ -424,7 +427,7 @@ func (cs *State) OnStart() error {
 	}
 
 	// now start the receiveRoutine
-	// 接收程序
+	// 启动接收程序
 	go cs.receiveRoutine(0)
 
 	// schedule the first round!
@@ -594,6 +597,8 @@ func (cs *State) updateRoundStep(round int32, step cstypes.RoundStepType) {
 func (cs *State) scheduleRound0(rs *cstypes.RoundState) {
 	// cs.Logger.Info("scheduleRound0", "now", tmtime.Now(), "startTime", cs.StartTime)
 	sleepDuration := rs.StartTime.Sub(tmtime.Now())
+
+	// 这一轮是发送了 cstypes.RoundStepNewHeight 事件类型
 	cs.scheduleTimeout(sleepDuration, rs.Height, 0, cstypes.RoundStepNewHeight)
 }
 
@@ -948,6 +953,7 @@ func (cs *State) handleMsg(mi msgInfo) {
 	}
 }
 
+// 核心方法
 func (cs *State) handleTimeout(ti timeoutInfo, rs cstypes.RoundState) {
 	cs.Logger.Debug("received tock", "timeout", ti.Duration, "height", ti.Height, "round", ti.Round, "step", ti.Step)
 
@@ -972,6 +978,7 @@ func (cs *State) handleTimeout(ti timeoutInfo, rs cstypes.RoundState) {
 		cs.enterPropose(ti.Height, 0)
 
 	case cstypes.RoundStepPropose:
+
 		if err := cs.eventBus.PublishEventTimeoutPropose(cs.RoundStateEvent()); err != nil {
 			cs.Logger.Error("failed publishing timeout propose", "err", err)
 		}
@@ -1137,6 +1144,7 @@ func (cs *State) enterPropose(height int64, round int32) {
 		// If we have the whole proposal + POL, then goto Prevote now.
 		// else, we'll enterPrevote when the rest of the proposal is received (in AddProposalBlockPart),
 		// or else after timeoutPropose
+		// 如果有完整的提案，就进行 provote 阶段
 		if cs.isProposalComplete() {
 			cs.enterPrevote(height, cs.Round)
 		}
@@ -1144,7 +1152,8 @@ func (cs *State) enterPropose(height int64, round int32) {
 
 	// If we don't get the proposal and all block parts quick enough, enterPrevote
 	// 如果不能迅速得到提案(proposal)和所有块状部分，进入 Prevote 阶段
-	// 如果是初始启动，肯定没有足够的状态，会进入 provote
+	// 如果是初始启动，肯定没有足够的状态
+	// 广播 cstypes.RoundStepPropose 的事件，handleTimeout 监听处理
 	cs.scheduleTimeout(cs.config.Propose(round), height, round, cstypes.RoundStepPropose)
 
 	// Nothing more to do if we're not a validator
@@ -1324,6 +1333,7 @@ func (cs *State) enterPrevote(height int64, round int32) {
 	// (so we have more time to try and collect +2/3 prevotes for a single block)
 }
 
+// 默认的 预投票 处理
 func (cs *State) defaultDoPrevote(height int64, round int32) {
 	logger := cs.Logger.With("height", height, "round", round)
 
@@ -1342,6 +1352,7 @@ func (cs *State) defaultDoPrevote(height int64, round int32) {
 	}
 
 	// Validate proposal block
+	// 验证 区块
 	err := cs.blockExec.ValidateBlock(cs.state, cs.ProposalBlock)
 	if err != nil {
 		// ProposalBlock is invalid, prevote nil.

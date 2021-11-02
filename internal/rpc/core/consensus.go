@@ -54,9 +54,11 @@ func (env *Environment) DumpConsensusState(ctx *rpctypes.Context) (*coretypes.Re
 	// Get Peer consensus states.
 
 	var peerStates []coretypes.PeerStateInfo
+	// 获取所有节点
 	peers := env.PeerManager.Peers()
 	peerStates = make([]coretypes.PeerStateInfo, 0, len(peers))
 	for _, pid := range peers {
+		// 遍历节点状态
 		peerState, ok := env.ConsensusReactor.GetPeerState(pid)
 		if !ok {
 			continue

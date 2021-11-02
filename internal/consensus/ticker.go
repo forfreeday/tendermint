@@ -14,6 +14,8 @@ var (
 // TimeoutTicker is a timer that schedules timeouts
 // conditional on the height/round/step in the timeoutInfo.
 // The timeoutInfo.Duration may be non-positive.
+// TimeoutTicker是一个计时器，它以timeoutInfo中的高度/轮次/步骤为条件安排超时。
+// timeoutInfo.Duration可能是非正数。
 type TimeoutTicker interface {
 	Start() error
 	Stop() error
@@ -70,6 +72,9 @@ func (t *timeoutTicker) Chan() <-chan timeoutInfo {
 // ScheduleTimeout schedules a new timeout by sending on the internal tickChan.
 // The timeoutRoutine is always available to read from tickChan, so this won't block.
 // The scheduling may fail if the timeoutRoutine has already scheduled a timeout for a later height/round/step.
+// ScheduleTimeout通过在内部tickChan上发送来安排一个新的超时。
+// timeoutRoutine总是可以从tickChan中读取，所以这不会阻塞。
+// 如果timeoutRoutine已经为以后的高度/轮次/步长安排了一个超时，则调度可能会失败。
 func (t *timeoutTicker) ScheduleTimeout(ti timeoutInfo) {
 	t.tickChan <- ti
 }

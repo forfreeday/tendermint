@@ -12,6 +12,9 @@ import (
 // values. A TxCache is used primarily to push transactions and removing
 // transactions. Pushing via Push returns a boolean telling the caller if the
 // transaction already exists in the cache or not.
+// TxCache为mempool中的原始事务缓存定义了一个接口。
+// 目前，TxCache不允许直接读取或获取事务的值。TxCache主要用于推送事务和删除事务。
+//通过推送返回一个布尔值，告诉调用者该事务是否已经存在于缓存中。 交易是否已经存在于缓存中。
 type TxCache interface {
 	// Reset resets the cache to an empty state.
 	Reset()
