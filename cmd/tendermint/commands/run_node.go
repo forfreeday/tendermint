@@ -114,7 +114,9 @@ func addDBFlags(cmd *cobra.Command) {
 
 // NewRunNodeCmd returns the command that allows the CLI to start a node.
 // It can be used with a custom PrivValidator and in-process ABCI application.
-func NewRunNodeCmd(nodeProvider cfg.ServiceProvider) *cobra.Command {
+func NewRunNodeCmd(
+	cfg.ServiceProvider) *cobra.Command {
+	// 添加到命令行
 	cmd := &cobra.Command{
 		Use:     "start",
 		Aliases: []string{"node", "run"},
@@ -123,12 +125,12 @@ func NewRunNodeCmd(nodeProvider cfg.ServiceProvider) *cobra.Command {
 			if err := checkGenesisHash(config); err != nil {
 				return err
 			}
-
+			// 这里调用 node.NewDefault 这个方法实现
 			n, err := nodeProvider(config, logger)
 			if err != nil {
 				return fmt.Errorf("failed to create node: %w", err)
 			}
-
+			// 启动服务
 			if err := n.Start(); err != nil {
 				return fmt.Errorf("failed to start node: %w", err)
 			}

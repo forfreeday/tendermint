@@ -43,6 +43,7 @@ func main() {
 	//	* Provide their own DB implementation
 	// can copy this file and use something other than the
 	// node.NewDefault function
+	// 创建节点为默认配置
 	nodeFunc := node.NewDefault
 
 	// Create & start node

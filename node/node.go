@@ -81,6 +81,7 @@ type nodeImpl struct {
 // newDefaultNode returns a Tendermint node with default settings for the
 // PrivValidator, ClientCreator, GenesisDoc, and DBProvider.
 // It implements NodeProvider.
+// 创建节点的默认配置
 func newDefaultNode(cfg *config.Config, logger log.Logger) (service.Service, error) {
 	nodeKey, err := types.LoadOrGenNodeKey(cfg.NodeKeyFile())
 	if err != nil {
@@ -506,7 +507,12 @@ func (n *nodeImpl) OnStart() error {
 
 	// Start the RPC server before the P2P server
 	// so we can eg. receive txs for the first block
+	// 这里顺带说下，tendermint 的3种节点为类型
+	// 	ModeFull      = "full" 数据转发节点
+	//	ModeValidator = "validator"  数据验证节点
+	//	ModeSeed      = "seed"   用来做节点发现
 	if n.config.RPC.ListenAddress != "" && n.config.Mode != config.ModeSeed {
+		// 启动 RPC
 		listeners, err := n.startRPC()
 		if err != nil {
 			return err
@@ -530,12 +536,14 @@ func (n *nodeImpl) OnStart() error {
 
 	n.isListening = true
 
+	// p2p 路由
 	if err = n.router.Start(); err != nil {
 		return err
 	}
 
 	if n.config.Mode != config.ModeSeed {
 		if n.config.BlockSync.Enable {
+			// 开启区块同步
 			if err := n.bcReactor.Start(); err != nil {
 				return err
 			}

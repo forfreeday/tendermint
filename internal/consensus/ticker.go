@@ -96,6 +96,9 @@ func (t *timeoutTicker) stopTimer() {
 // send on tickChan to start a new timer.
 // timers are interupted and replaced by new ticks from later steps
 // timeouts of 0 on the tickChan will be immediately relayed to the tockChan
+// 在tickChan上发送，启动一个新的定时器。
+// 计时器被打断，并被后来的步骤中的新的ticks所取代
+// tickChan上的超时为0，将立即转发到tockChan上。
 func (t *timeoutTicker) timeoutRoutine() {
 	t.Logger.Debug("Starting timeout routine")
 	var ti timeoutInfo
@@ -105,6 +108,10 @@ func (t *timeoutTicker) timeoutRoutine() {
 			t.Logger.Debug("Received tick", "old_ti", ti, "new_ti", newti)
 
 			// ignore tickers for old height/round/step
+			// 假设程序首次启动
+			// ti.Height = 0
+			// ti.Round = 0
+			// ti.Step = 0
 			if newti.Height < ti.Height {
 				continue
 			} else if newti.Height == ti.Height {

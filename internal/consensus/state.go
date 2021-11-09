@@ -44,12 +44,14 @@ var (
 var msgQueueSize = 1000
 
 // msgs from the reactor which may update the state
+// 来自 reactor 的消息，也就是网络的消息，可以更新状态。
 type msgInfo struct {
 	Msg    Message      `json:"msg"`
 	PeerID types.NodeID `json:"peer_key"`
 }
 
 // internally generated messages which may update the state
+// 内部产生的信息，可能会更新状态
 type timeoutInfo struct {
 	Duration time.Duration         `json:"duration"`
 	Height   int64                 `json:"height"`
@@ -108,6 +110,7 @@ type State struct {
 
 	// state changes may be triggered by: msgs from peers,
 	// msgs from ourself, or by timeouts
+	// 状态变化可能由以下因素触发：来自 peer 的信息、自己的信息（指internalMsg）或超时
 	peerMsgQueue     chan msgInfo
 	internalMsgQueue chan msgInfo
 	timeoutTicker    TimeoutTicker
@@ -646,6 +649,8 @@ func (cs *State) reconstructLastCommit(state sm.State) {
 
 // Updates State and increments height to match that of state.
 // The round becomes 0 and cs.Step becomes cstypes.RoundStepNewHeight.
+// 更新状态并增加高度以匹配状态的高度。
+// round 轮次变成0，cs.Step 变成 cstypes.RoundStepNewHeight。
 func (cs *State) updateToState(state sm.State) {
 	if cs.CommitRound > -1 && 0 < cs.Height && cs.Height != state.LastBlockHeight {
 		panic(fmt.Sprintf(
@@ -822,14 +827,21 @@ func (cs *State) receiveRoutine(maxSteps int) {
 				return
 			}
 		}
-		//拿到当前链状态
+		// 拿到当前链状态
 		rs := cs.RoundState
+
+		// 注意，这个是接收的 reactor 的消息
 		var mi msgInfo
 
+		// 处理三种类型的消息
+		// 1.peerMsgQueue 来自节点的消息
+		// 2.internalMsgQueue 内部消息
+		// 3.timeoutTicker 超时的消息
 		select {
 		case <-cs.txNotifier.TxsAvailable():
 			cs.handleTxsAvailable()
 
+			// peer 节点消息
 		case mi = <-cs.peerMsgQueue:
 			if err := cs.wal.Write(mi); err != nil {
 				cs.Logger.Error("failed writing to WAL", "err", err)
@@ -858,7 +870,7 @@ func (cs *State) receiveRoutine(maxSteps int) {
 			}
 
 			// handles proposals, block parts, votes
-			// 核心的状态逻辑处理
+			// 核心的状态逻辑处理，处理 proposals, block parts, votes
 			cs.handleMsg(mi)
 
 		// 注意这个监听，ScheduleTimeout 的 channel
@@ -879,6 +891,7 @@ func (cs *State) receiveRoutine(maxSteps int) {
 }
 
 // state transitions on complete-proposal, 2/3-any, 2/3-one
+// 完整的提案状态转换，2/3 以上，或 2/3
 func (cs *State) handleMsg(mi msgInfo) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
@@ -958,6 +971,7 @@ func (cs *State) handleTimeout(ti timeoutInfo, rs cstypes.RoundState) {
 	cs.Logger.Debug("received tock", "timeout", ti.Duration, "height", ti.Height, "round", ti.Round, "step", ti.Step)
 
 	// timeouts must be for current height, round, step
+	// 超时必须是针对当前的高度、轮次、步骤
 	if ti.Height != rs.Height || ti.Round < rs.Round || (ti.Round == rs.Round && ti.Step < rs.Step) {
 		cs.Logger.Debug("ignoring tock because we are ahead", "height", rs.Height, "round", rs.Round, "step", rs.Step)
 		return
@@ -968,13 +982,15 @@ func (cs *State) handleTimeout(ti timeoutInfo, rs cstypes.RoundState) {
 	defer cs.mtx.Unlock()
 
 	switch ti.Step {
+	// round0 发起的第一个阶段事件
 	case cstypes.RoundStepNewHeight:
 		// NewRound event fired from enterNewRound.
 		// XXX: should we fire timeout here (for timeout commit)?
 		cs.enterNewRound(ti.Height, 0)
 
+	// round0 的第二个阶段
 	case cstypes.RoundStepNewRound:
-		//如果当前状态是新一轮，进入处理
+		//如果当前状态是新一轮，进入处理，会确定 proposer
 		cs.enterPropose(ti.Height, 0)
 
 	case cstypes.RoundStepPropose:
@@ -1041,6 +1057,7 @@ func (cs *State) handleTxsAvailable() {
 // Enter: +2/3 precommits for nil at (height,round-1)
 // Enter: +2/3 prevotes any or +2/3 precommits for block or any from (height, round)
 // NOTE: cs.StartTime was already set for height.
+// 进入新一轮
 func (cs *State) enterNewRound(height int64, round int32) {
 	logger := cs.Logger.With("height", height, "round", round)
 
@@ -1059,6 +1076,7 @@ func (cs *State) enterNewRound(height int64, round int32) {
 	logger.Debug("entering new round", "current", fmt.Sprintf("%v/%v/%v", cs.Height, cs.Round, cs.Step))
 
 	// increment validators if necessary
+	// 必要时增加 validator
 	validators := cs.Validators
 	if cs.Round < round {
 		validators = validators.Copy()
@@ -1068,6 +1086,7 @@ func (cs *State) enterNewRound(height int64, round int32) {
 	// Setup new round
 	// we don't fire newStep for this step,
 	// but we fire an event, so update the round step first
+	// 只是 set 值
 	cs.updateRoundStep(round, cstypes.RoundStepNewRound)
 	cs.Validators = validators
 	if round == 0 {
@@ -1084,6 +1103,7 @@ func (cs *State) enterNewRound(height int64, round int32) {
 	cs.Votes.SetRound(tmmath.SafeAddInt32(round, 1)) // also track next round (round+1) to allow round-skipping
 	cs.TriggeredTimeoutPrecommit = false
 
+	// 发布事件？？
 	if err := cs.eventBus.PublishEventNewRound(cs.NewRoundEvent()); err != nil {
 		cs.Logger.Error("failed publishing new round", "err", err)
 	}
@@ -1093,13 +1113,17 @@ func (cs *State) enterNewRound(height int64, round int32) {
 	// Wait for txs to be available in the mempool
 	// before we enterPropose in round 0. If the last block changed the app hash,
 	// we may need an empty "proof" block, and enterPropose immediately.
+	// 进入 round0 之前，等待mempool中的txs可用。
+	// 如果最后一个区块改变了应用程序的哈希值，我们可能需要一个空的 "证明 "区块，并立即输入Propose。
 	waitForTxs := cs.config.WaitForTxs() && round == 0 && !cs.needProofBlock(height)
 	if waitForTxs {
 		if cs.config.CreateEmptyBlocksInterval > 0 {
+			// 构建空块证明，进入下一个阶段
 			cs.scheduleTimeout(cs.config.CreateEmptyBlocksInterval, height, round,
 				cstypes.RoundStepNewRound)
 		}
 	} else {
+		// 进入 propose 阶段
 		cs.enterPropose(height, round)
 	}
 }
@@ -1180,6 +1204,7 @@ func (cs *State) enterPropose(height int64, round int32) {
 		return
 	}
 
+	// 推算 proposer 的逻辑在里面
 	if cs.isProposer(address) {
 		logger.Debug(
 			"propose step; our turn to propose",
@@ -1188,6 +1213,7 @@ func (cs *State) enterPropose(height int64, round int32) {
 		// 准备提案
 		cs.decideProposal(height, round)
 	} else {
+		// 不是 proposer 就是 validator 没的选
 		logger.Debug(
 			"propose step; not our turn to propose",
 			"proposer", cs.Validators.GetProposer().Address,
@@ -1749,6 +1775,7 @@ func (cs *State) finalizeCommit(height int64) {
 	cs.RecordMetrics(height, block)
 
 	// NewHeightStep!
+	// 注意，首轮的状态更新是从这里处理
 	cs.updateToState(stateCopy)
 
 	fail.Fail() // XXX
@@ -2050,6 +2077,7 @@ func (cs *State) tryAddVote(vote *types.Vote, peerID types.NodeID) (bool, error)
 	return added, nil
 }
 
+// 处理 PrevoteType、PrecommitType 类型
 func (cs *State) addVote(vote *types.Vote, peerID types.NodeID) (added bool, err error) {
 	cs.Logger.Debug(
 		"adding vote",
@@ -2062,6 +2090,7 @@ func (cs *State) addVote(vote *types.Vote, peerID types.NodeID) (added bool, err
 	// A precommit for the previous height?
 	// These come in while we wait timeoutCommit
 	if vote.Height+1 == cs.Height && vote.Type == tmproto.PrecommitType {
+
 		if cs.Step != cstypes.RoundStepNewHeight {
 			// Late precommit at prior height is ignored
 			cs.Logger.Debug("precommit vote came in after commit timeout and has been ignored", "vote", vote)
