@@ -1210,7 +1210,7 @@ func (cs *State) enterPropose(height int64, round int32) {
 			"propose step; our turn to propose",
 			"proposer", address,
 		)
-		// 准备提案
+		// 准备提案，产块
 		cs.decideProposal(height, round)
 	} else {
 		// 不是 proposer 就是 validator 没的选
@@ -1225,7 +1225,7 @@ func (cs *State) isProposer(address []byte) bool {
 	return bytes.Equal(cs.Validators.GetProposer().Address, address)
 }
 
-// 默认提案处理
+// 默认提案处理，就是产块
 func (cs *State) defaultDecideProposal(height int64, round int32) {
 	var block *types.Block
 	var blockParts *types.PartSet

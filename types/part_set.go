@@ -179,6 +179,7 @@ func NewPartSetFromData(data []byte, partSize uint32) *PartSet {
 		partsBitArray.SetIndex(int(i), true)
 	}
 	// Compute merkle proofs
+	// 计算 默克尔证明
 	root, proofs := merkle.ProofsFromByteSlices(partsBytes)
 	for i := uint32(0); i < total; i++ {
 		parts[i].Proof = *proofs[i]

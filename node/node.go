@@ -233,9 +233,11 @@ func makeNode(cfg *config.Config,
 		return nil, err
 	}
 
+	// 创建p2p 开始
 	p2pLogger := logger.With("module", "p2p")
 	transport := createTransport(p2pLogger, cfg)
 
+	// p2p管理器
 	peerManager, err := createPeerManager(cfg, dbProvider, p2pLogger, nodeKey.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create peer manager: %w", err)
